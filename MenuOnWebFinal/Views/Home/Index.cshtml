@@ -3,7 +3,8 @@
     ViewBag.Title = "Home Page";
 }
 
-@{<div class="row">
+@{
+    <div class="row">
     @foreach (ViewRecipe recipe in @ViewBag.Recipes)
     {
         <h2>@recipe.Name</h2>
@@ -12,7 +13,7 @@
         <p>@recipe.Text</p>
         <div>@Html.ActionLink("Читати ще", "Details", "Recipe", new { id = recipe.Id }, null)</div>
     }
-</div>
+    </div>
     if (@ViewBag.IsAuthenticated == "true")
     {
          <div>@Html.ActionLink("Створити рецепт", "Create", "Recipe")</div>
@@ -20,11 +21,11 @@
     }
     if (@ViewBag.EnableAction == "links")
     {
-                    <ul>
-                        <li>@Html.ActionLink("Create User", "CreateUser", "Admin")</li>
-                        <li>@Html.ActionLink("Assign Role", "AssignRole", "Admin")</li>
-                        <li>@Html.ActionLink("Delete User", "DeleteUser", "Admin")</li>
-                    </ul>
-                    }
-                }
+        <ul>
+            <li>@Html.ActionLink("Create User", "CreateUser", "Admin")</li>
+            <li>@Html.ActionLink("Assign Role", "AssignRole", "Admin")</li>
+            <li>@Html.ActionLink("Delete User", "DeleteUser", "Admin")</li>
+        </ul>
     }
+}
+    

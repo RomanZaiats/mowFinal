@@ -7,23 +7,34 @@ using System.Threading.Tasks;
 using System.Web;
 using System.Web.Mvc;
 using Microsoft.AspNet.Identity;
+using System.Collections.Generic;
+using MenuOnWebFinal.Repository;
 
 namespace MenuOnWebFinal.Controllers
 {
     [Authorize]
     public class RecipeController : Controller
     {
-        ApplicationDbContext db = new ApplicationDbContext();
+        IRecipeRepository db;
+        public RecipeController()
+        {
+            db = new RecipeRepository();
+        }
+
+        public RecipeController(IRecipeRepository repository)
+        {
+            db = repository;
+        }
 
         [AllowAnonymous]
         public ActionResult Details(int id)
         {
-            var recipe = db.Recipes.FirstOrDefault(i => i.Id == id);
+            var recipe = db.FindRecipe(id);
             if (recipe == null)
             {
                 return RedirectToAction("Index", "Home");
             }
-            ViewBag.Comments = db.Comments.Where(i => i.RecipeId == id);
+            ViewBag.Comments = db.FindRecipeComments(id);
             return View((ViewRecipe)recipe);
         }
 
@@ -48,8 +59,8 @@ namespace MenuOnWebFinal.Controllers
                 string imagePath = UploadFile(model.ImageFile, "images/thumbnails");
                 recipe.ImageUrl = imagePath;
 
-                db.Recipes.Add(recipe);
-                db.SaveChanges();
+                db.AddRecipe(recipe);
+                db.Save();
 
                 return RedirectToAction("Index", "Home");
             }
@@ -77,8 +88,14 @@ namespace MenuOnWebFinal.Controllers
 
         public ActionResult Edit(int id)
         {
-            var recipe = db.Recipes.Find(id);
+            var recipe = db.FindRecipe(id);
             if (recipe == null)
+            {
+                return HttpNotFound();
+            }
+            var userId = User.Identity.GetUserId();
+            var isModerator = User.IsInRole("Moderator");
+            if (userId != recipe.UserId && isModerator == false)
             {
                 return HttpNotFound();
             }
@@ -104,7 +121,7 @@ namespace MenuOnWebFinal.Controllers
                     throw new Exception();
                 }
 
-                var recipeToUpdate = db.Recipes.Find(editedRecipe.Id);
+                var recipeToUpdate = db.FindRecipe(editedRecipe.Id);
 
                 string imagePath = "";
                 string imageToDelete = "";
@@ -123,8 +140,8 @@ namespace MenuOnWebFinal.Controllers
                     recipeToUpdate.ImageUrl = imagePath;
                 }
 
-                db.Entry(recipeToUpdate).State = EntityState.Modified;
-                db.SaveChanges();
+                db.UpdateRecipe(recipeToUpdate);
+                db.Save();
 
                 if (imageToDelete != "")
                 {
@@ -141,11 +158,18 @@ namespace MenuOnWebFinal.Controllers
 
         public ActionResult Delete(int id)
         {
-            var recipeToDelite = db.Recipes.Find(id);
+            var recipeToDelite = db.FindRecipe(id);
             if (recipeToDelite == null)
             {
                 return HttpNotFound();
             }
+            var userId = User.Identity.GetUserId();
+            var isModerator = User.IsInRole("Moderator");
+            if (userId != recipeToDelite.UserId && isModerator == false)
+            {
+                return HttpNotFound();
+            }
+
             if (recipeToDelite.ImageUrl != null)
             {
                 try
@@ -155,8 +179,8 @@ namespace MenuOnWebFinal.Controllers
                 catch { }
             }
 
-            db.Recipes.Remove(recipeToDelite);
-            db.SaveChanges();
+            db.DeleteRecipe(recipeToDelite);
+            db.Save();
             return RedirectToAction("Index", "Home");
         }
 
@@ -166,8 +190,8 @@ namespace MenuOnWebFinal.Controllers
             {
                 var commentToAdd = (Comment)comment;
                 commentToAdd.UserId = User.Identity.GetUserId();
-                db.Comments.Add(commentToAdd);
-                db.SaveChanges();
+                db.AddComment(commentToAdd);
+                db.Save();
                 return RedirectToAction("Details", "Recipe", new { id = comment.RecipeId });
             }
             catch
@@ -176,19 +200,20 @@ namespace MenuOnWebFinal.Controllers
             }
         }
 
+        [Authorize(Roles = "Moderator")]
         [HttpGet]
         public ActionResult DeleteComment(int id)
         {
             try
             {
-                var commentToDelete = db.Comments.Find(id);
+                var commentToDelete = db.FindComment(id);
                 if (commentToDelete == null)
                 {
                     throw new Exception();
                 }
 
-                db.Comments.Remove(commentToDelete);
-                db.SaveChanges();
+                db.DeleteComment(commentToDelete);
+                db.Save();
                 return RedirectToAction("Details", "Recipe", new { id = commentToDelete.RecipeId });
             }
             catch
@@ -198,9 +223,10 @@ namespace MenuOnWebFinal.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult> Like(LikeModel like)
+        public ActionResult Like(LikeModel like)
         {
-            var l = db.Likes.FirstOrDefault(i => i.UserId == User.Identity.GetUserId() && i.RecipeId == like.RecipeId);
+            var id = User.Identity.GetUserId();
+            var l = db.FindLike(id, like.RecipeId);
             if (l != null)
             {
                 if (l.Value == 0)
@@ -210,9 +236,8 @@ namespace MenuOnWebFinal.Controllers
 
                 var val = l.Value;
 
-                db.Entry(l).State = EntityState.Modified;
-                await db.SaveChangesAsync();
-
+                db.UpdateLike(l);
+                db.Save();
 
                 return RedirectToAction("Details", "Recipe", new { id = like.RecipeId });
             }
@@ -225,12 +250,76 @@ namespace MenuOnWebFinal.Controllers
                     RecipeId = like.RecipeId,
                     Value = 1
                 };
-                db.Likes.Add(likeToAdd);
+                db.AddLike(likeToAdd);
 
-                await db.SaveChangesAsync();
+                db.Save();
 
                 return RedirectToAction("Details", "Recipe", new { id = like.RecipeId });
             }
+        }
+
+        [HttpGet]
+        public ActionResult AddToFavourite(int recipeId)
+        {
+            var id = User.Identity.GetUserId();
+            var user = db.FindUser(id);
+            var recipe = db.FindRecipe(recipeId);
+
+            var result = user.FavouriteRecipes.FirstOrDefault(i => i.UserId == id && i.Id == recipeId);
+            if(result == null)
+            {
+                user.FavouriteRecipes.Add(recipe);
+            }
+            else
+            {
+                user.FavouriteRecipes.Remove(recipe);
+            }
+
+            db.Save();
+
+            return RedirectToAction("Details", "Recipe", new { id = recipeId });
+        }
+
+        [HttpGet]
+        public ActionResult GetFavourites()
+        {
+            var id = User.Identity.GetUserId();
+            var user = db.FindUser(id);
+            var favRecipes = user.FavouriteRecipes.ToList();
+            List<ViewRecipe> recipes = new List<ViewRecipe>();
+
+            foreach (var item in favRecipes)
+            {
+                recipes.Add((ViewRecipe)item);
+            }
+
+            ViewBag.Recipes = recipes;
+
+            return View();
+        }
+
+        [HttpGet]
+        public ActionResult MyRecipes()
+        {
+            var id = User.Identity.GetUserId();
+            var user = db.FindUser(id);
+            var myRecipes = user.Recipes.ToList();
+            List<ViewRecipe> recipes = new List<ViewRecipe>();
+
+            foreach (var item in myRecipes)
+            {
+                recipes.Add((ViewRecipe)item);
+            }
+
+            ViewBag.Recipes = recipes;
+
+            return View();
+        }
+
+        [HttpPost]
+        public ActionResult Find(SearchModel model)
+        {
+            throw new NotImplementedException();
         }
     }
 }

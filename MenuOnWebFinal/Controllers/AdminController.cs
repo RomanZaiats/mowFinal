@@ -55,13 +55,20 @@ namespace MenuOnWebFinal.Controllers
         [HttpPost]
         public ActionResult AssignRole(FormCollection form)
         {
-            string userName = form["txtUserName"];
-            string role = form["RoleName"];
+            try
+            {
+                string userName = form["txtUserName"];
+                string role = form["RoleName"];
 
-            User existingUser = context.Users.Where(u => u.UserName.Equals(userName)).FirstOrDefault();
-            var userManager = new UserManager<User>(new UserStore<User>(context));
-            userManager.AddToRole(existingUser.Id, role);
-            return RedirectToAction("Index", "Home");
+                User existingUser = context.Users.Where(u => u.UserName.Equals(userName)).FirstOrDefault();
+                var userManager = new UserManager<User>(new UserStore<User>(context));
+                userManager.AddToRole(existingUser.Id, role);
+                return RedirectToAction("Index", "Home");
+            }
+            catch
+            {
+                return HttpNotFound();
+            }
         }
 
         public ActionResult DeleteUser()

@@ -27,6 +27,8 @@
     <br>
     <div>@Html.ActionLink("Видалити", "Delete", "Recipe", new { id = Model.Id }, null)</div>
     <div>@Html.ActionLink("Редагувати", "Edit", "Recipe", new { id = Model.Id }, null)</div>
+    <div>@Html.ActionLink("В улюблені", "AddToFavourite", "Recipe", new { recipeId = Model.Id }, null)</div>
+
 
 
     <form method="post" action="/Recipe/AddComment">
